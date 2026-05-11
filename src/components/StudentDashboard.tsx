@@ -8,7 +8,7 @@ import { useAuth } from '../App';
 import { CURRICULUM } from '../constants';
 import { calculateLevel, getLevelProgress } from '../lib/levelUtils';
 import { motion, AnimatePresence } from 'motion/react';
-import { Trophy, BookOpen, Calculator, Star, TrendingUp, CheckCircle2, Trophy as TrophyIcon, Medal, Award, LogOut, Hand, Moon, Sun, Crown, Heart, Send, ChevronLeft, PenTool, Keyboard, Target, Info, Package, ArrowRight, Sparkles } from 'lucide-react';
+import { Trophy, BookOpen, Calculator, Star, TrendingUp, CheckCircle2, Trophy as TrophyIcon, Medal, Award, LogOut, Hand, Moon, Sun, Crown, Heart, Send, ChevronLeft, PenTool, Keyboard, Target, Info, Package, ArrowRight, Sparkles, Maximize, Minimize } from 'lucide-react';
 import MathProblemScreen from './MathProblemScreen';
 import TopicWritingScreen from './TopicWritingScreen';
 import TypingPracticeScreen from './TypingPracticeScreen';
@@ -35,6 +35,31 @@ export default function StudentDashboard() {
 
   const [runTutorial, setRunTutorial] = useState(false);
   const [tutorialKey, setTutorialKey] = useState(0);
+
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  const toggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+      } else {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        }
+      }
+    } catch (err) {
+      console.error('Error toggling fullscreen:', err);
+    }
+  };
+
   const tutorialSteps: Step[] = React.useMemo(() => [
     { target: '#tutorial-student-1', content: t('tutorial_student_1' as any) || '프로필을 누르면 지금까지 획득한 XP와 레벨업에 필요한 XP를 확인할 수 있습니다.', placement: 'bottom', skipBeacon: true },
     { target: '#tutorial-student-2', content: t('tutorial_student_2' as any) || '선생님이 내주신 특별 과제를 확인하고 도전해보세요.', placement: 'bottom', skipBeacon: true },
@@ -75,6 +100,7 @@ export default function StudentDashboard() {
   const [mathMode, setMathMode] = useState<'new' | 'view' | 'retry'>('new');
   const [isLiteracyOpen, setIsLiteracyOpen] = useState(false);
   const [isTypingOpen, setIsTypingOpen] = useState(false);
+  const [showKeyboardPopup, setShowKeyboardPopup] = useState(false);
   const [isStudentInfoOpen, setIsStudentInfoOpen] = useState(false);
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
   const [isTitleSelectorOpen, setIsTitleSelectorOpen] = useState(false);
@@ -656,6 +682,13 @@ export default function StudentDashboard() {
           
           <div className="absolute top-4 right-4 sm:top-5 sm:right-5 z-20 flex items-center gap-2">
             <button
+              onClick={toggleFullscreen}
+              className="group w-8 h-8 md:w-9 md:h-9 flex items-center justify-center rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 text-slate-700 shadow-[inset_-1px_-2px_4px_rgba(0,0,0,0.05),_inset_1px_2px_4px_rgba(255,255,255,0.7),_0_2px_6px_rgba(0,0,0,0.05)] hover:-translate-y-0.5 hover:shadow-[inset_-1px_-2px_4px_rgba(0,0,0,0.05),_inset_1px_2px_4px_rgba(255,255,255,0.7),_0_4px_10px_rgba(0,0,0,0.1)] active:translate-y-0.5 active:shadow-[inset_-1px_-1px_2px_rgba(0,0,0,0.05),_inset_1px_1px_2px_rgba(255,255,255,0.7),_0_1px_2px_rgba(0,0,0,0.05)] transition-all border-none"
+              title={isFullscreen ? "전체화면 종료" : "전체화면"}
+            >
+              {isFullscreen ? <Minimize className="w-4 h-4 md:w-4.5 md:h-4.5 group-hover:scale-110 transition-transform" /> : <Maximize className="w-4 h-4 md:w-4.5 md:h-4.5 group-hover:scale-110 transition-transform" />}
+            </button>
+            <button
               onClick={startTutorial}
               className="group w-8 h-8 md:w-9 md:h-9 flex items-center justify-center rounded-xl bg-gradient-to-br from-indigo-200 to-indigo-400 text-indigo-800 shadow-[inset_-1px_-2px_4px_rgba(0,0,0,0.1),_inset_1px_2px_4px_rgba(255,255,255,0.7),_0_2px_6px_rgba(0,0,0,0.1)] hover:-translate-y-0.5 hover:shadow-[inset_-1px_-2px_4px_rgba(0,0,0,0.1),_inset_1px_2px_4px_rgba(255,255,255,0.7),_0_4px_10px_rgba(0,0,0,0.15)] active:translate-y-0.5 active:shadow-[inset_-1px_-1px_2px_rgba(0,0,0,0.1),_inset_1px_1px_2px_rgba(255,255,255,0.7),_0_1px_2px_rgba(0,0,0,0.1)] transition-all border-none"
               title="튜토리얼 다시보기"
@@ -836,7 +869,7 @@ export default function StudentDashboard() {
               desc={t('typing_practice_desc' as any) || '타자 실력을 쑥쑥 키워보세요!'}
               color="purple"
               completed={false}
-              onClick={() => setIsTypingOpen(true)}
+              onClick={() => setShowKeyboardPopup(true)}
               badge={getBadgeContent('typing')}
             />
           )}
@@ -905,6 +938,49 @@ export default function StudentDashboard() {
               >
                 확인
               </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Keyboard Connection Modal */}
+      <AnimatePresence>
+        {showKeyboardPopup && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-[2rem] p-8 max-w-sm w-full shadow-2xl overflow-hidden relative"
+            >
+              <div className="absolute top-0 right-0 w-32 h-32 bg-purple-100 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 opacity-50"></div>
+              <div className="relative z-10 text-center">
+                <div className="w-20 h-20 bg-gradient-to-br from-purple-100 to-purple-200 rounded-[1.5rem] flex items-center justify-center mx-auto mb-6 shadow-sm border border-purple-100/50">
+                  <Keyboard className="w-10 h-10 text-purple-600" />
+                </div>
+                <h3 className="text-2xl font-black mb-3 text-slate-800">키보드 연결 확인</h3>
+                <p className="text-slate-500 mb-8 font-medium leading-relaxed">
+                  타자연습을 시작하기 전에<br />
+                  <span className="text-purple-600 font-bold">키보드가 연결되어 있는지</span> 확인해주세요!
+                </p>
+                <div className="flex flex-col gap-3">
+                  <button
+                    onClick={() => {
+                      setShowKeyboardPopup(false);
+                      setIsTypingOpen(true);
+                    }}
+                    className="w-full bg-gradient-to-b from-purple-500 to-purple-600 text-white font-bold py-4 rounded-2xl shadow-[0_4px_10px_rgba(168,85,247,0.3),_inset_0_2px_0_rgba(255,255,255,0.2)] hover:from-purple-400 hover:to-purple-500 hover:shadow-[0_6px_15px_rgba(168,85,247,0.4),_inset_0_2px_0_rgba(255,255,255,0.3)] active:scale-[0.98] active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.1)] transition-all"
+                  >
+                    확인했어요
+                  </button>
+                  <button
+                    onClick={() => setShowKeyboardPopup(false)}
+                    className="w-full bg-slate-100 text-slate-500 font-bold py-4 rounded-2xl hover:bg-slate-200 active:scale-[0.98] transition-all"
+                  >
+                    취소
+                  </button>
+                </div>
+              </div>
             </motion.div>
           </div>
         )}
