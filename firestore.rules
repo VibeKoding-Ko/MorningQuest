@@ -1,0 +1,184 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} { allow read, write: if false; }
+
+    // --- Phase 3: Primitive Definitions ---
+    function isSignedIn() { return request.auth != null; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+
+    // Teacher check
+    function isTeacher() { 
+      return isSignedIn() && exists(/databases/$(database)/documents/teachers/$(request.auth.uid));
+    }
+    function getTeacher() {
+      return get(/databases/$(database)/documents/teachers/$(request.auth.uid)).data;
+    }
+
+    // --- Phase 2: Relationship Helpers ---
+    function isOwner(ownerId) { return isSignedIn() && request.auth.uid == ownerId; }
+
+    // --- Phase 4: Validation Blueprints ---
+
+    function isValidTeacher(data) {
+      return data.keys().hasAll(['uid', 'email', 'name', 'school', 'classId'])
+        && data.keys().size() == 5
+        && data.uid == request.auth.uid
+        && data.email is string && data.email.size() <= 100
+        && data.name is string && data.name.size() <= 50
+        && data.school is string && data.school.size() <= 100
+        && data.classId is string;
+    }
+
+    function isValidClass(data) {
+      return data.keys().hasAll(['id', 'teacherUid', 'name', 'year', 'grade', 'classNumber'])
+        && data.keys().size() == 6
+        && data.id is string && data.id.size() <= 64
+        && data.teacherUid == request.auth.uid
+        && data.name is string && data.name.size() <= 50
+        && data.year is int
+        && data.grade is int
+        && data.classNumber is int;
+    }
+
+    function isValidStudent(data) {
+      // Basic fields check. Map.keys() supports hasAll. 
+      // Note: During update, we only check the fields that change via affectedKeys().
+      return data.keys().hasAll(['studentId', 'password', 'name', 'number', 'grade', 'class', 'classId', 'xp', 'level'])
+        && data.studentId is string && data.studentId.size() <= 50
+        && data.name is string && data.name.size() <= 50
+        && data.xp is int && data.xp >= 0
+        && data.level is int && data.level >= 1
+        && (data.starPieces is int || !data.keys().hasAny(['starPieces']));
+    }
+
+    function isValidSubmission(data) {
+      return data.keys().hasAll(['studentId', 'classId', 'date', 'type', 'score', 'isFirstAttempt', 'answers'])
+        && data.studentId is string && data.studentId.size() <= 50
+        && data.classId is string
+        && data.date is string && data.date.size() == 10
+        && data.type in ['math', 'literacy']
+        && data.score is int && data.score >= 0 && data.score <= 100
+        && data.isFirstAttempt is bool
+        && data.answers is list;
+    }
+
+    // --- Rules Match Blocks ---
+
+    // 1. Teachers
+    match /teachers/{teacherUid} {
+      allow get: if isSignedIn();
+      allow create: if isSignedIn() && isValidTeacher(incoming());
+      allow update: if isSignedIn() && teacherUid == request.auth.uid 
+        && isValidTeacher(incoming());
+    }
+
+    // 2. Teacher Mappings
+    match /teacherMappings/{mappingId} {
+      allow get: if true;
+      allow create: if true;
+      allow update, delete: if isTeacher();
+    }
+
+    // 3. Classes
+    match /classes/{classId} {
+      allow get: if isSignedIn() && isValidId(classId);
+      allow list: if isSignedIn();
+      allow create: if isTeacher() && isValidClass(incoming());
+      allow update: if isTeacher() && existing().teacherUid == request.auth.uid 
+        && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'year', 'grade', 'classNumber'])
+          && isValidClass(incoming())
+        );
+      allow delete: if isTeacher() && existing().teacherUid == request.auth.uid;
+    }
+
+    // 4. Students
+    match /students/{studentId} {
+      allow get: if isValidId(studentId);
+      allow list: if isSignedIn();
+      allow create: if isTeacher() ;
+      allow update: if (
+        (isTeacher() && getTeacher().classId == existing().classId) ||
+        (isSignedIn() && (
+          // Action: Profile Update
+          (incoming().diff(existing()).affectedKeys().hasOnly(['password', 'nickname', 'title']) && incoming().nickname.size() <= 50) ||
+          // Action: Progress Update
+          (incoming().diff(existing()).affectedKeys().hasOnly(['xp', 'level', 'starPieces', 'lastActiveDate', 'consecutiveDays', 'dailyXp', 'lastMathCompletedDate', 'lastLiteracyCompletedDate']))
+        ))
+      );
+      allow delete: if isTeacher();
+    }
+
+    // 5. Daily Tasks
+    match /dailyTasks/{taskId} {
+      allow get: if isSignedIn() && isValidId(taskId);
+      allow list: if isSignedIn();
+      allow create, update, delete: if isTeacher();
+    }
+
+    // 6. Submissions
+    match /submissions/{submissionId} {
+      allow get: if isSignedIn() && isValidId(submissionId);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidSubmission(incoming());
+      allow update: if isTeacher();
+    }
+
+    // 7. Mind Diaries
+    match /mindDiaries/{diaryId} {
+      allow get: if isSignedIn() && isValidId(diaryId);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isTeacher() || (isSignedIn() && incoming().studentId == existing().studentId);
+    }
+
+    // 8. Topic Writings
+    match /topicWritings/{writingId} {
+      allow get: if isSignedIn() && isValidId(writingId);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isTeacher() || (isSignedIn() && incoming().studentId == existing().studentId);
+    }
+
+    // 9. Shop Items
+    match /shopItems/{itemId} {
+      allow get: if isSignedIn() && isValidId(itemId);
+      allow list: if isSignedIn();
+      allow create, update, delete: if isTeacher();
+    }
+
+    // 10. Purchase Records
+    match /purchaseRecords/{recordId} {
+      allow get: if isSignedIn() && isValidId(recordId);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isTeacher() || (isSignedIn() && incoming().diff(existing()).affectedKeys().hasOnly(['used']));
+    }
+
+    // 11. Mission Quests
+    match /missionQuests/{missionId} {
+      allow get: if isSignedIn() && isValidId(missionId);
+      allow list: if isSignedIn();
+      allow create, update, delete: if isTeacher();
+    }
+
+    // 12. Mission Submissions
+    match /missionSubmissions/{submissionId} {
+      allow get: if isSignedIn() && isValidId(submissionId);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isTeacher();
+    }
+
+    // 13. Schools
+    match /schools/{schoolId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if isSignedIn();
+    }
+  }
+}

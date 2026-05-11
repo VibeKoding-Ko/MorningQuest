@@ -1,0 +1,230 @@
+  function StudentManagement({ students, classId, teacher }: { students: Student[]; classId: string; teacher: Teacher }) {
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [studentToDelete, setStudentToDelete] = useState<{id: string, name: string} | null>(null);
+  const [editingStudent, setEditingStudent] = useState<{id: string, name: string} | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+
+  const [newName, setNewName] = useState('');
+  const [newNumber, setNewNumber] = useState('');
+  const [newId, setNewId] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [newGrade, setNewGrade] = useState('1');
+
+  const handleAddStudent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const student: Student = {
+      studentId: newId,
+      password: newPw,
+      name: newName,
+      number: parseInt(newNumber),
+      grade: parseInt(newGrade),
+      class: 1, // Default
+      classId,
+      school: teacher.school || '',
+      xp: 0,
+      level: 1
+    };
+
+    try {
+      await setDoc(doc(db, 'students', newId), student);
+      setShowAddModal(false);
+      setNewName(''); setNewNumber(''); setNewId(''); setNewPw('');
+    } catch (e) {
+      alert('학생 등록 실패: ' + (e instanceof Error ? e.message : ''));
+    }
+  };
+
+  const handleDeleteStudent = async () => {
+    if (!studentToDelete) return;
+    try {
+      await deleteDoc(doc(db, 'students', studentToDelete.id));
+      setShowDeleteModal(false);
+      setStudentToDelete(null);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, `students/${studentToDelete.id}`);
+    }
+  };
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingStudent) return;
+    try {
+      await updateDoc(doc(db, 'students', editingStudent.id), { password: newPassword });
+      setShowPasswordModal(false);
+      setEditingStudent(null);
+      setNewPassword('');
+      alert('비밀번호가 변경되었습니다.');
+    } catch (e) {
+      alert('비밀번호 변경 실패: ' + (e instanceof Error ? e.message : ''));
+    }
+  };
+
+  const handleLevelChange = async (studentId: string, currentLevel: number, newLevelStr: string) => {
+    const newLevel = parseInt(newLevelStr);
+    if (isNaN(newLevel) || newLevel === currentLevel) return;
+    
+    // Set XP to the minimum required for the new level
+    const targetXp = LEVEL_THRESHOLDS[newLevel - 1];
+
+    try {
+      await updateDoc(doc(db, 'students', studentId), {
+        level: newLevel,
+        xp: targetXp
+      });
+      alert(`레벨이 ${newLevel}로 변경되었습니다.`);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.UPDATE, 'students');
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold">학생 목록 ({students.length}명)</h2>
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-100"
+        >
+          <UserPlus className="w-5 h-5" />
+          학생 등록
+        </button>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <table className="w-full text-left">
+          <thead className="bg-gray-50 border-b border-gray-100">
+            <tr>
+              <th className="px-6 py-4 font-semibold text-gray-600">번호</th>
+              <th className="px-6 py-4 font-semibold text-gray-600">이름</th>
+              <th className="px-6 py-4 font-semibold text-gray-600">아이디</th>
+              <th className="px-6 py-4 font-semibold text-gray-600">학년</th>
+              <th className="px-6 py-4 font-semibold text-gray-600">레벨</th>
+              <th className="px-6 py-4 font-semibold text-gray-600">경험치</th>
+              <th className="px-6 py-4 font-semibold text-gray-600 text-right">관리</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {students.sort((a, b) => a.number - b.number).map(s => (
+              <tr key={s.studentId} className="hover:bg-gray-50 transition-all">
+                <td className="px-6 py-4">{s.number}번</td>
+                <td className="px-6 py-4 font-bold">{s.name}</td>
+                <td className="px-6 py-4 text-gray-500 font-mono">{s.studentId}</td>
+                <td className="px-6 py-4">{s.grade}학년</td>
+                <td className="px-6 py-4 flex items-center gap-2">
+                  <RankBadge level={s.level} />
+                  <select
+                    value={s.level}
+                    onChange={(e) => handleLevelChange(s.studentId, s.level, e.target.value)}
+                    className="text-xs border-2 border-gray-200 rounded-lg px-2 py-1 bg-gray-50 focus:border-blue-500 font-bold"
+                  >
+                    {Array.from({ length: 50 }, (_, i) => i + 1).map(l => (
+                      <option key={l} value={l}>Lv.{l}</option>
+                    ))}
+                  </select>
+                </td>
+                <td className="px-6 py-4 text-gray-500">{s.xp} XP</td>
+                <td className="px-6 py-4 text-right flex justify-end gap-2">
+                  <button
+                    onClick={() => {
+                      setEditingStudent({ id: s.studentId, name: s.name });
+                      setNewPassword('');
+                      setShowPasswordModal(true);
+                    }}
+                    className="px-3 py-1.5 text-sm font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                  >
+                    비밀번호 변경
+                  </button>
+                  <button
+                    onClick={() => {
+                      setStudentToDelete({ id: s.studentId, name: s.name });
+                      setShowDeleteModal(true);
+                    }}
+                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    title="학생 삭제"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl">
+            <h3 className="text-xl font-bold mb-6">새 학생 등록</h3>
+            <form onSubmit={handleAddStudent} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">번호</label>
+                  <input type="number" required value={newNumber} onChange={e => setNewNumber(e.target.value)} className="w-full px-4 py-2 rounded-xl border border-gray-200" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">이름</label>
+                  <input type="text" required value={newName} onChange={e => setNewName(e.target.value)} className="w-full px-4 py-2 rounded-xl border border-gray-200" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">학년</label>
+                <select value={newGrade} onChange={e => setNewGrade(e.target.value)} className="w-full px-4 py-2 rounded-xl border border-gray-200">
+                  {[1,2,3,4,5,6].map(g => <option key={g} value={g}>{g}학년</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">아이디</label>
+                <input type="text" required value={newId} onChange={e => setNewId(e.target.value)} className="w-full px-4 py-2 rounded-xl border border-gray-200" placeholder="학생이 로그인할 ID" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">비밀번호</label>
+                <input type="text" required value={newPw} onChange={e => setNewPw(e.target.value)} className="w-full px-4 py-2 rounded-xl border border-gray-200" />
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all font-bold">취소</button>
+                <button type="submit" className="flex-1 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-bold">등록하기</button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
+      {showPasswordModal && editingStudent && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl">
+            <h3 className="text-xl font-bold mb-2">비밀번호 변경</h3>
+            <p className="text-gray-500 mb-6">{editingStudent.name} 학생의 새 비밀번호를 입력하세요.</p>
+            <form onSubmit={handleUpdatePassword} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">새 비밀번호</label>
+                <input type="text" required value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full px-4 py-2 rounded-xl border border-gray-200" placeholder="새로운 비밀번호" />
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button type="button" onClick={() => { setShowPasswordModal(false); setEditingStudent(null); }} className="flex-1 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all font-bold">취소</button>
+                <button type="submit" className="flex-1 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-bold">변경하기</button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
+      {showDeleteModal && studentToDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl text-center">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-8 h-8 text-red-500" />
+            </div>
+            <h3 className="text-xl font-bold mb-2">학생 삭제</h3>
+            <p className="text-gray-500 mb-6 font-medium">정말 <span className="text-gray-800 font-bold">{studentToDelete.name}</span> 학생을 삭제하시겠습니까?<br/>이 작업은 되돌릴 수 없습니다.</p>
+            <div className="flex gap-3">
+              <button onClick={() => { setShowDeleteModal(false); setStudentToDelete(null); }} className="flex-1 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all font-bold text-gray-600">취소</button>
+              <button onClick={handleDeleteStudent} className="flex-1 py-3 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-all font-bold">삭제하기</button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </div>
+  );
+}

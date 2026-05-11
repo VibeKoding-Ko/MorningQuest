@@ -1,0 +1,77 @@
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+@import "tailwindcss";
+
+@font-face {
+  font-family: 'HakgyoansimJayeon';
+  src: url('/fonts/Hakgyoansim_JayeonOTFR.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'HakgyoansimJayeon';
+  src: url('/fonts/Hakgyoansim_JayeonOTFR.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'MorningQuest';
+  src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_2205-2@1.0/MorningQuest.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'HakgyoansimBadasseugi';
+  src: url("/fonts/Hakgyoansim Badasseugi OTF B.otf") format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme {
+  --font-sans: "Pretendard", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-jayeon: "HakgyoansimJayeon", sans-serif;
+  --font-morning: "MorningQuest", sans-serif;
+  --font-badasseugi: "HakgyoansimBadasseugi", sans-serif;
+}
+
+/* Custom Scrollbar for Modals */
+.modal-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.3s ease-in-out;
+}
+
+.modal-scrollbar:hover {
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.modal-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+  margin-top: 100px;
+  margin-bottom: 100px;
+}
+
+.modal-scrollbar::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 20px;
+  background-clip: padding-box;
+  border: 1px solid transparent;
+}
+
+.modal-scrollbar:hover::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+}
+
+.modal-scrollbar:active::-webkit-scrollbar-thumb {
+  background-color: #94a3b8;
+}

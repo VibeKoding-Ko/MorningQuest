@@ -1,0 +1,252 @@
+{
+  "entities": {
+    "Teacher": {
+      "title": "Teacher",
+      "description": "A teacher who manages a class and students.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "name": { "type": "string" },
+        "school": { "type": "string" },
+        "classId": { "type": "string" }
+      },
+      "required": ["uid", "email", "name", "school", "classId"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "A student registered by a teacher.",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string", "description": "Custom ID set by teacher" },
+        "password": { "type": "string" },
+        "name": { "type": "string" },
+        "nickname": { "type": "string" },
+        "number": { "type": "integer" },
+        "grade": { "type": "integer" },
+        "class": { "type": "integer" },
+        "classId": { "type": "string" },
+        "xp": { "type": "integer" },
+        "level": { "type": "integer" },
+        "starPieces": { "type": "integer" },
+        "consecutiveDays": { "type": "integer" },
+        "lastActiveDate": { "type": "string", "format": "date" },
+        "lastMathCompletedDate": { "type": "string", "format": "date" },
+        "lastLiteracyCompletedDate": { "type": "string", "format": "date" },
+        "title": { "type": "string" },
+        "dailyXp": { "type": "object" }
+      },
+      "required": ["studentId", "password", "name", "number", "grade", "class", "classId", "xp", "level"]
+    },
+    "Class": {
+      "title": "Class",
+      "description": "A class managed by a teacher.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "teacherUid": { "type": "string" },
+        "name": { "type": "string" },
+        "year": { "type": "integer" },
+        "grade": { "type": "integer" },
+        "classNumber": { "type": "integer" }
+      },
+      "required": ["id", "teacherUid", "name"]
+    },
+    "DailyTask": {
+      "title": "DailyTask",
+      "description": "The specific math/literacy task for a class on a given date.",
+      "type": "object",
+      "properties": {
+        "classId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "mathConfig": { "type": "object" },
+        "literacyConfig": { "type": "object" },
+        "enableMindDiary": { "type": "boolean" },
+        "enableTopicWriting": { "type": "boolean" },
+        "enableMath": { "type": "boolean" },
+        "enableLiteracy": { "type": "boolean" }
+      },
+      "required": ["classId", "date"]
+    },
+    "Submission": {
+      "title": "Submission",
+      "description": "A student's result for a daily task.",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string" },
+        "classId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "type": { "type": "string", "enum": ["math", "literacy"] },
+        "score": { "type": "integer" },
+        "isFirstAttempt": { "type": "boolean" },
+        "answers": { "type": "array", "items": { "type": "object" } },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["studentId", "classId", "date", "type", "score"]
+    },
+    "MindDiary": {
+      "title": "MindDiary",
+      "description": "A student's daily mind diary entry.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "classId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "mood": { "type": "string" },
+        "content": { "type": "string" },
+        "teacherComment": { "type": "string" },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["id", "studentId", "classId", "date", "mood", "content", "createdAt"]
+    },
+    "TopicWriting": {
+      "title": "TopicWriting",
+      "description": "A student's daily topic writing entry.",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string" },
+        "classId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "topic": { "type": "string" },
+        "content": { "type": "string" },
+        "teacherComment": { "type": "string" },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["studentId", "classId", "date", "topic", "content", "createdAt"]
+    },
+    "ShopItem": {
+      "title": "ShopItem",
+      "description": "An item students can buy in the shop.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "classId": { "type": "string" },
+        "name": { "type": "string" },
+        "price": { "type": "integer" },
+        "quantity": { "type": "integer" },
+        "description": { "type": "string" },
+        "isTitle": { "type": "boolean" },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["id", "classId", "name", "price", "quantity"]
+    },
+    "PurchaseRecord": {
+      "title": "PurchaseRecord",
+      "description": "A record of a student's purchase.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "classId": { "type": "string" },
+        "studentId": { "type": "string" },
+        "itemId": { "type": "string" },
+        "itemName": { "type": "string" },
+        "price": { "type": "integer" },
+        "purchasedAt": { "type": "integer" },
+        "used": { "type": "boolean" }
+      },
+      "required": ["id", "classId", "studentId", "itemId", "itemName", "price", "purchasedAt"]
+    },
+    "MissionQuest": {
+      "title": "MissionQuest",
+      "description": "A mission assigned by the teacher.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "classId": { "type": "string" },
+        "title": { "type": "string" },
+        "dueDate": { "type": "string", "format": "date" },
+        "createdAt": { "type": "integer" },
+        "isRecurring": { "type": "boolean" }
+      },
+      "required": ["id", "classId", "title", "dueDate", "createdAt"]
+    },
+    "MissionSubmission": {
+      "title": "MissionSubmission",
+      "description": "A student's submission for a mission.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "missionId": { "type": "string" },
+        "studentId": { "type": "string" },
+        "classId": { "type": "string" },
+        "submittedAt": { "type": "integer" },
+        "submittedAtDate": { "type": "string", "format": "date" },
+        "rewardStars": { "type": "integer" }
+      },
+      "required": ["id", "missionId", "studentId", "classId", "submittedAt"]
+    },
+    "School": {
+      "title": "School",
+      "description": "A registered school name for autocomplete.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" }
+      },
+      "required": ["name"]
+    },
+    "TeacherMapping": {
+      "title": "TeacherMapping",
+      "description": "Maps custom teacher ID to real email for login.",
+      "type": "object",
+      "properties": {
+        "realEmail": { "type": "string", "format": "email" }
+      },
+      "required": ["realEmail"]
+    }
+  },
+  "firestore": {
+    "/teachers/{teacherUid}": {
+      "schema": "Teacher",
+      "description": "Teacher profiles."
+    },
+    "/teacherMappings/{mappingId}": {
+      "schema": "TeacherMapping",
+      "description": "Mappings from custom ID to email."
+    },
+    "/classes/{classId}": {
+      "schema": "Class",
+      "description": "Class information."
+    },
+    "/students/{studentId}": {
+      "schema": "Student",
+      "description": "Student profiles."
+    },
+    "/dailyTasks/{taskId}": {
+      "schema": "DailyTask",
+      "description": "Daily tasks (taskId = classId_date)."
+    },
+    "/submissions/{submissionId}": {
+      "schema": "Submission",
+      "description": "Student submissions (submissionId = studentId_date_type)."
+    },
+    "/mindDiaries/{diaryId}": {
+      "schema": "MindDiary",
+      "description": "Student mind diaries (diaryId = studentId_date)."
+    },
+    "/topicWritings/{writingId}": {
+      "schema": "TopicWriting",
+      "description": "Student topic writings (writingId = studentId_date)."
+    },
+    "/shopItems/{itemId}": {
+      "schema": "ShopItem",
+      "description": "Shop items for classes."
+    },
+    "/purchaseRecords/{recordId}": {
+      "schema": "PurchaseRecord",
+      "description": "Records of student purchases."
+    },
+    "/missionQuests/{missionId}": {
+      "schema": "MissionQuest",
+      "description": "Teacher assigned missions."
+    },
+    "/missionSubmissions/{submissionId}": {
+      "schema": "MissionSubmission",
+      "description": "Student mission submissions."
+    },
+    "/schools/{schoolId}": {
+      "schema": "School",
+      "description": "Registered schools."
+    }
+  }
+}
