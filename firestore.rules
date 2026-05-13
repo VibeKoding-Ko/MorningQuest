@@ -52,18 +52,31 @@ service cloud.firestore {
         && data.name is string && data.name.size() <= 50
         && data.xp is int && data.xp >= 0
         && data.level is int && data.level >= 1
-        && (data.starPieces is int || !data.keys().hasAny(['starPieces']));
+        && (data.starPieces is int || !data.keys().hasAny(['starPieces']))
+        && (data.typingBasicScores is map || !data.keys().hasAny(['typingBasicScores']))
+        && (data.typingStars is map || !data.keys().hasAny(['typingStars']))
+        && (data.typingStats is map || !data.keys().hasAny(['typingStats']))
+        && (data.typingMaxCpm is int || data.typingMaxCpm is float || !data.keys().hasAny(['typingMaxCpm']))
+        && (data.typingParagraphScore is int || data.typingParagraphScore is float || !data.keys().hasAny(['typingParagraphScore']))
+        && (data.typingMaxScore is int || data.typingMaxScore is float || !data.keys().hasAny(['typingMaxScore']))
+        && (data.currentAreaId is string || !data.keys().hasAny(['currentAreaId']));
     }
 
     function isValidSubmission(data) {
-      return data.keys().hasAll(['studentId', 'classId', 'date', 'type', 'score', 'isFirstAttempt', 'answers'])
+      return data.keys().hasAll(['studentId', 'classId', 'date', 'type', 'score', 'isFirstAttempt'])
         && data.studentId is string && data.studentId.size() <= 50
         && data.classId is string
         && data.date is string && data.date.size() == 10
-        && data.type in ['math', 'literacy']
-        && data.score is int && data.score >= 0 && data.score <= 100
+        && data.type in ['math', 'literacy', 'typing']
+        && data.score is int && data.score >= 0
         && data.isFirstAttempt is bool
-        && data.answers is list;
+        && (data.answers is list || !data.keys().hasAny(['answers']))
+        && (data.cpm is int || data.cpm is float || !data.keys().hasAny(['cpm']))
+        && (data.accuracy is int || data.accuracy is float || !data.keys().hasAny(['accuracy']))
+        && (data.typingPracticeScore is int || data.typingPracticeScore is float || !data.keys().hasAny(['typingPracticeScore']))
+        && (data.createdAt is int || !data.keys().hasAny(['createdAt']))
+        && (data.menu is string || !data.keys().hasAny(['menu']))
+        && (data.xpGainsCount is int || !data.keys().hasAny(['xpGainsCount']));
     }
 
     // --- Rules Match Blocks ---
@@ -107,7 +120,7 @@ service cloud.firestore {
           // Action: Profile Update
           (incoming().diff(existing()).affectedKeys().hasOnly(['password', 'nickname', 'title']) && incoming().nickname.size() <= 50) ||
           // Action: Progress Update
-          (incoming().diff(existing()).affectedKeys().hasOnly(['xp', 'level', 'starPieces', 'lastActiveDate', 'consecutiveDays', 'dailyXp', 'lastMathCompletedDate', 'lastLiteracyCompletedDate']))
+          (incoming().diff(existing()).affectedKeys().hasOnly(['xp', 'level', 'starPieces', 'lastActiveDate', 'consecutiveDays', 'dailyXp', 'lastMathCompletedDate', 'lastLiteracyCompletedDate', 'typingBasicScores', 'typingStats', 'typingStars', 'typingMaxCpm', 'typingParagraphScore', 'typingMaxScore', 'currentAreaId']))
         ))
       );
       allow delete: if isTeacher();
@@ -125,7 +138,7 @@ service cloud.firestore {
       allow get: if isSignedIn() && isValidId(submissionId);
       allow list: if isSignedIn();
       allow create: if isSignedIn() && isValidSubmission(incoming());
-      allow update: if isTeacher();
+      allow update: if isTeacher() || (isSignedIn() && incoming().studentId == existing().studentId && isValidSubmission(incoming()));
     }
 
     // 7. Mind Diaries

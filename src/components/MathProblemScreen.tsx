@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { MathProblemList } from './MathProblemRenderer';
+import { getTodayDateString } from '../lib/dateUtils';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { doc, setDoc, updateDoc, getDoc, increment } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, getDoc, collection, query, where, getDocs, increment } from 'firebase/firestore';
 import { Student, DailyTask, Submission } from '../types';
 import { generateProblems, getMathPrompt } from '../lib/mathGenerator';
 import { CURRICULUM } from '../constants';
 import { calculateLevel } from '../lib/levelUtils';
 import { motion, AnimatePresence } from 'motion/react';
 import { Trophy, ArrowRight, ChevronLeft, Star, Calculator, Home, RotateCcw, CheckCircle2, XCircle } from 'lucide-react';
-import { useLanguage } from '../contexts/LanguageContext';
+import { useLanguage, useDynamicTranslation } from '../contexts/LanguageContext';
 import XpEffect from './XpEffect';
 
 interface MathProblemScreenProps {
@@ -122,7 +123,10 @@ export const renderMathText = (text: string) => {
 };
 
 export default function MathProblemScreen({ task, student, onBack, mode = 'new', previousSubmission }: MathProblemScreenProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  
+  const rawPromptText = getMathPrompt((task.studentMathConfigs?.[student.studentId] || task.mathConfig).area);
+  const translatedPromptText = useDynamicTranslation(rawPromptText);
   
   const initialProblems = (mode === 'view' || mode === 'retry') && previousSubmission
     ? previousSubmission.answers.map((a) => ({ question: a.question, correctAnswer: a.correctAnswer }))
@@ -135,13 +139,15 @@ export default function MathProblemScreen({ task, student, onBack, mode = 'new',
   const [userAnswers, setUserAnswers] = useState<string[]>(initialAnswers);
   const [isSubmitted, setIsSubmitted] = useState(mode === 'view');
   const [score, setScore] = useState(mode === 'view' ? previousSubmission?.score || 0 : 0);
-  const [results, setResults] = useState<{ question: string; userAnswer: string; correctAnswer: string; isCorrect: boolean }[]>(mode === 'view' ? previousSubmission?.answers || [] : []);
+  const [results, setResults] = useState<{ question: string; userAnswer: string; correctAnswer: string; isCorrect: boolean }[]>((mode === 'view' || mode === 'retry') ? previousSubmission?.answers || [] : []);
   const [isFirstAttempt, setIsFirstAttempt] = useState(true);
+  const [xpGainsCount, setXpGainsCount] = useState(previousSubmission?.xpGainsCount ?? 0);
   const [hasProgressed, setHasProgressed] = useState(false);
   const [earnedXp, setEarnedXp] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState(900); // 15 minutes
   const [timerActive, setTimerActive] = useState(mode === 'new' || mode === 'retry');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showCompletionPopup, setShowCompletionPopup] = useState(false);
 
   useEffect(() => {
     if (timerActive && timeLeft > 0) {
@@ -157,12 +163,18 @@ export default function MathProblemScreen({ task, student, onBack, mode = 'new',
   useEffect(() => {
     // Check if first attempt
     const checkFirstAttempt = async () => {
-      const today = new Date().toISOString().split('T')[0];
+      const today = getTodayDateString();
       const path = `submissions/${student.studentId}_${today}_math`;
       try {
         const subRef = doc(db, 'submissions', `${student.studentId}_${today}_math`);
         const subSnap = await getDoc(subRef);
-        setIsFirstAttempt(!subSnap.exists());
+        if (subSnap.exists()) {
+          setIsFirstAttempt(false);
+          setXpGainsCount(subSnap.data().xpGainsCount ?? 0);
+        } else {
+          setIsFirstAttempt(true);
+          setXpGainsCount(0);
+        }
       } catch (error) {
         handleFirestoreError(error, OperationType.GET, path);
       }
@@ -189,7 +201,7 @@ export default function MathProblemScreen({ task, student, onBack, mode = 'new',
 
     // Only generate problems if in new mode and problems are empty
     if (mode === 'new' && problems.length === 0) {
-      const today = new Date().toISOString().split('T')[0];
+      const today = getTodayDateString();
       const draftId = `math_draft_${student.studentId}_${today}`;
       
       const savedDraft = localStorage.getItem(draftId);
@@ -234,7 +246,7 @@ export default function MathProblemScreen({ task, student, onBack, mode = 'new',
   // Debounced save for answers
   useEffect(() => {
     if (mode === 'new' && problems.length > 0 && !isSubmitted) {
-      const today = new Date().toISOString().split('T')[0];
+      const today = getTodayDateString();
       const draftId = `math_draft_${student.studentId}_${today}`;
       const timer = setTimeout(() => {
         try {
@@ -254,7 +266,7 @@ export default function MathProblemScreen({ task, student, onBack, mode = 'new',
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayDateString();
     let correctCount = 0;
     const finalResults = problems.map((p, i) => {
       let isCorrect = true;
@@ -305,6 +317,7 @@ export default function MathProblemScreen({ task, student, onBack, mode = 'new',
     setScore(finalScore);
     setResults(finalResults);
     setIsSubmitted(true);
+    setShowCompletionPopup(true);
     setTimerActive(false);
 
     // Save submission
@@ -317,6 +330,15 @@ export default function MathProblemScreen({ task, student, onBack, mode = 'new',
     const unitInfo = CURRICULUM[grade as keyof typeof CURRICULUM]?.[semester as 1|2]?.find(u => u.id === unitId);
     const areaInfo = unitInfo?.areas.find(a => a.id === mathConfig.area);
 
+    const isCoreTask = task.coreTasks?.includes('math');
+    const maxRewards = 1;
+    const canEarnXp = xpGainsCount < maxRewards;
+
+    let xpGain = 0;
+    if (canEarnXp) {
+      xpGain = Math.round((finalScore / 100) * 25);
+    }
+
     const submission: Submission = {
       studentId: student.studentId,
       classId: student.classId,
@@ -324,6 +346,7 @@ export default function MathProblemScreen({ task, student, onBack, mode = 'new',
       type: 'math',
       score: finalScore,
       isFirstAttempt,
+      xpGainsCount: xpGainsCount + (xpGain > 0 ? 1 : 0),
       answers: finalResults,
       grade,
       semester,
@@ -336,18 +359,8 @@ export default function MathProblemScreen({ task, student, onBack, mode = 'new',
     try {
       await setDoc(doc(db, 'submissions', `${student.studentId}_${today}_math`), submission);
 
-      // Update student XP/Level if first attempt
-      if (isFirstAttempt) {
-        const isCoreTask = task.coreTasks?.includes('math');
-        let xpGain = 5;
-        if (isCoreTask) {
-          if (finalScore >= 80) xpGain = 25;
-          else if (finalScore >= 60) xpGain = 20;
-          else if (finalScore >= 40) xpGain = 15;
-          else if (finalScore >= 21) xpGain = 10;
-          else xpGain = 0;
-        }
-
+      // Update student XP/Level if first attempt or they can earn XP
+      if (canEarnXp && xpGain > 0) {
         const rewardStars = 2;
 
         const newXp = student.xp + xpGain;
@@ -372,7 +385,9 @@ export default function MathProblemScreen({ task, student, onBack, mode = 'new',
           }
         }
 
-        await updateDoc(doc(db, 'students', student.studentId), updates);
+        await updateDoc(doc(db, 'students', student.studentId), updates).catch(e => {
+            handleFirestoreError(e, OperationType.UPDATE, `students/${student.studentId}`);
+        });
         setEarnedXp(xpGain);
       }
     } catch (e) {
@@ -382,109 +397,7 @@ export default function MathProblemScreen({ task, student, onBack, mode = 'new',
     }
   };
 
-  if (isSubmitted) {
-    return (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="min-h-screen bg-blue-50 flex flex-col items-center justify-center p-4"
-      >
-        <div className="bg-white rounded-3xl p-8 w-full max-w-2xl shadow-2xl text-center border-4 border-white">
-          <div className="mb-6">
-            <div className="w-24 h-24 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-yellow-200">
-              <Trophy className="w-12 h-12 text-yellow-500" />
-            </div>
-            <h2 className="text-4xl font-black text-gray-800 mb-2">{t('correct')}</h2>
-            <p className="text-gray-500 font-bold">{t('completed_today')}</p>
-          </div>
 
-          <div className="bg-blue-50 rounded-2xl p-6 mb-8 flex justify-around items-center">
-            <div className="text-center">
-              <p className="text-sm text-blue-600 font-bold mb-1">{t('score')}</p>
-              <p className="text-4xl font-black text-blue-700">{score}점</p>
-            </div>
-            <div className="w-px h-12 bg-blue-200" />
-            <div className="text-center">
-              <p className="text-sm text-blue-600 font-bold mb-1">{t('xp_earned')}</p>
-              <p className="text-4xl font-black text-blue-700">+{isFirstAttempt ? (earnedXp || 0) : 0} {t('xp')}</p>
-            </div>
-          </div>
-
-          {hasProgressed && (
-            <div className="bg-yellow-50 rounded-2xl p-4 mb-8 border-2 border-yellow-200 text-yellow-800 font-bold flex items-center justify-center gap-2">
-              <Star className="w-6 h-6 text-yellow-500" />
-              축하합니다! 80점 이상을 받아 다음 영역으로 넘어갑니다!
-            </div>
-          )}
-
-          <div className="space-y-4 max-h-64 overflow-y-auto mb-8 p-4 bg-gray-50 rounded-2xl text-left">
-            <h3 className="font-bold text-gray-600 mb-2">{t('explanation')}</h3>
-            {results.map((r, i) => {
-              let displayQuestion = r.question;
-              try {
-                const parsedQ = JSON.parse(r.question);
-                if (parsedQ.type === 'split_gather') {
-                  if (parsedQ.mode === 'split') {
-                    displayQuestion = `${parsedQ.top} 가르기: ${parsedQ.bottom1 === '?' ? '□' : parsedQ.bottom1}, ${parsedQ.bottom2 === '?' ? '□' : parsedQ.bottom2}`;
-                  } else {
-                    displayQuestion = `${parsedQ.top1 === '?' ? '□' : parsedQ.top1}, ${parsedQ.top2 === '?' ? '□' : parsedQ.top2} 모으기: ${parsedQ.bottom === '?' ? '□' : parsedQ.bottom}`;
-                  }
-                } else if (parsedQ.type === 'relation_mul_div') {
-                  displayQuestion = `${parsedQ.n1} × ${parsedQ.n2} = ${parsedQ.prod} ➔ 나눗셈식 2개`;
-                } else if (parsedQ.type === 'relation_div_mul') {
-                  displayQuestion = `${parsedQ.prod} ÷ ${parsedQ.n1} = ${parsedQ.n2} ➔ 곱셈식 2개`;
-                }
-              } catch (e) {
-                // not json
-                const verticalMatch = displayQuestion.match(/^([\d.]+)\n([+\-×÷])\s*([\d.]+)\n---$/);
-                if (verticalMatch) {
-                  displayQuestion = `${verticalMatch[1]} ${verticalMatch[2]} ${verticalMatch[3]} = ?`;
-                }
-              }
-
-              return (
-                <div key={i} className="flex items-center justify-between p-3 bg-white rounded-xl border border-gray-100">
-                  <div className="flex items-center gap-3">
-                    <span className="text-gray-400 font-bold">{i + 1}.</span>
-                    <div className="font-bold">{renderMathText(displayQuestion)}</div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className={`font-black flex items-center gap-2 ${r.isCorrect ? 'text-blue-600' : 'text-red-500'}`}>
-                      {t('my_answer')}: {renderMathText(r.userAnswer || '(없음)')}
-                    </div>
-                    {!r.isCorrect && <div className="text-green-600 font-bold flex items-center gap-2">{t('correct_answer')}: {renderMathText(r.correctAnswer)}</div>}
-                    {r.isCorrect ? <CheckCircle2 className="text-green-500 w-5 h-5" /> : <XCircle className="text-red-500 w-5 h-5" />}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="flex gap-4">
-            <button
-              onClick={() => {
-                setIsSubmitted(false);
-                setResults([]);
-              }}
-              className="flex-1 bg-white text-blue-600 border-2 border-blue-600 py-4 rounded-2xl font-bold text-lg hover:bg-blue-50 transition-all shadow-xl shadow-blue-100 flex items-center justify-center gap-2"
-            >
-              <RotateCcw className="w-6 h-6" /> 다시 풀기
-            </button>
-            <button
-              onClick={onBack}
-              className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-bold text-lg hover:bg-blue-700 transition-all shadow-xl shadow-blue-100 flex items-center justify-center gap-2"
-            >
-              <Home className="w-6 h-6" /> {t('go_back')}
-            </button>
-          </div>
-        </div>
-
-        {earnedXp !== null && (
-          <XpEffect xp={earnedXp} onComplete={() => setEarnedXp(null)} />
-        )}
-      </motion.div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-blue-50 pb-12">
@@ -536,23 +449,27 @@ export default function MathProblemScreen({ task, student, onBack, mode = 'new',
       )}
 
       <main className="max-w-4xl mx-auto px-4 mt-8 relative">
-        <div className="bg-white rounded-3xl p-8 shadow-xl shadow-blue-100 border-2 border-white space-y-8">
+        <div className={`bg-white rounded-3xl p-8 shadow-xl shadow-blue-100 border-2 border-white space-y-8 ${showCompletionPopup ? 'pointer-events-none opacity-50 select-none' : ''}`}>
           <div className="text-center mb-6">
-            <h3 className="text-lg sm:text-xl font-bold text-blue-800">{
-              getMathPrompt((task.studentMathConfigs?.[student.studentId] || task.mathConfig).area) === '다음 계산을 하세요.' 
-                ? t('calculate_following') 
-                : getMathPrompt((task.studentMathConfigs?.[student.studentId] || task.mathConfig).area)
-            }</h3>
+            <h3 className="text-lg sm:text-xl font-bold text-blue-800">{translatedPromptText}</h3>
           </div>
           
           <div className="w-full">
             <MathProblemList 
                 problems={problems} 
-                userAnswers={userAnswers} 
+                userAnswers={userAnswers}
+                results={results.length > 0 ? results : undefined}
                 onChangeAnswer={(i, val) => {
                   const newAnswers = [...userAnswers];
                   newAnswers[i] = val;
                   setUserAnswers(newAnswers);
+                  if (results && results.length > 0) {
+                    const newResults = [...results];
+                    if (newResults[i]) {
+                      (newResults[i] as any).isCorrect = undefined;
+                    }
+                    setResults(newResults);
+                  }
                 }} 
                 mode={mode === 'new' ? 'new' : 'solve'}
                 area={(task.studentMathConfigs?.[student.studentId] || task.mathConfig).area}
@@ -577,6 +494,58 @@ export default function MathProblemScreen({ task, student, onBack, mode = 'new',
           )}
         </div>
       </main>
+
+      <AnimatePresence>
+        {showCompletionPopup && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl text-center relative border-4 border-white"
+            >
+              <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-yellow-200">
+                <Trophy className="w-10 h-10 text-yellow-500" />
+              </div>
+              <h2 className="text-2xl font-black text-gray-800 mb-2">오늘의 수학과제를 완료하였습니다!</h2>
+              
+              <div className="bg-blue-50 rounded-2xl p-4 mb-6">
+                <p className="text-blue-800 font-bold text-lg">
+                  {results.filter(r => r.isCorrect).length} / {problems.length} 정답
+                </p>
+              </div>
+
+              {earnedXp !== null && earnedXp > 0 ? (
+                 <p className="text-blue-600 font-bold text-lg mb-6">경험치 {earnedXp} 획득!</p>
+              ) : (
+                  <p className="text-gray-500 font-bold mb-6">문제 풀이를 완료했습니다.</p>
+              )}
+
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => {
+                    setShowCompletionPopup(false);
+                    setIsSubmitted(false);
+                  }}
+                  className="w-full bg-white text-blue-600 border-2 border-blue-600 py-3 rounded-2xl font-bold text-lg hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
+                >
+                  <RotateCcw className="w-5 h-5" /> 다시 풀기
+                </button>
+                <button
+                  onClick={onBack}
+                  className="w-full bg-blue-600 text-white py-3 rounded-2xl font-bold text-lg hover:bg-blue-700 transition-all flex items-center justify-center gap-2 shadow-md"
+                >
+                  <Home className="w-5 h-5" /> 돌아가기
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {earnedXp !== null && earnedXp > 0 && (
+        <XpEffect xp={earnedXp} onComplete={() => setEarnedXp(null)} />
+      )}
     </div>
   );
 }

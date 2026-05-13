@@ -5,6 +5,7 @@ import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Student } from '../types';
 import { RankBadge } from '../lib/rank';
+import { getTodayDateString } from '../lib/dateUtils';
 
 interface RankingModalProps {
   isOpen: boolean;
@@ -54,14 +55,14 @@ export default function RankingModal({ isOpen, onClose, currentStudent, rankingT
       return s.typingParagraphScore || 0;
     }
     if (period === 'today') {
-      const today = new Date().toISOString().split('T')[0];
+      const today = getTodayDateString();
       return s.dailyXp?.[today] || 0;
     }
     return s.xp || 0;
   };
 
   // 1. 개인 랭킹 (Individual Ranking within School)
-  const today = new Date().toISOString().split('T')[0];
+  const today = getTodayDateString();
   const sortedStudents = [...schoolStudents].sort((a, b) => {
     return getScore(b, rankingPeriod) - getScore(a, rankingPeriod);
   });

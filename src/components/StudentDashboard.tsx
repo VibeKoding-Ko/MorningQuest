@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Joyride, Step } from 'react-joyride';
 import { TutorialTooltip } from './TutorialTooltip';
+import { getTodayDateString } from '../lib/dateUtils';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, query, where, onSnapshot, doc, getDoc, getDocs, orderBy, limit, setDoc, updateDoc, increment } from 'firebase/firestore';
 import { Student, DailyTask, Submission } from '../types';
@@ -136,7 +137,7 @@ export default function StudentDashboard() {
   useEffect(() => {
     // Update consecutive days logic
     const updateActiveDate = async () => {
-      const today = new Date().toISOString().split('T')[0];
+      const today = getTodayDateString();
       if (student.lastActiveDate !== today) {
         let newConsecutive = 1;
         if (student.lastActiveDate) {
@@ -190,7 +191,7 @@ export default function StudentDashboard() {
   useEffect(() => {
     if (!student.classId) return;
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayDateString();
     const taskRef = doc(db, 'dailyTasks', `${student.classId}_${today}`);
     const unsubTask = onSnapshot(taskRef, async (snapshot) => {
       if (snapshot.exists()) {
@@ -287,10 +288,15 @@ export default function StudentDashboard() {
     if (diaryContent.trim().length < 50 || isSubmittingDiary) return;
 
     setIsSubmittingDiary(true);
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayDateString();
     const diaryId = `${student.studentId}_${today}`;
     
     try {
+      const isCoreTask = dailyTask?.coreTasks?.includes('mindDiary');
+      const maxRewards = 1;
+      const xpGainsCount = mindDiary?.xpGainsCount || 0;
+      const canEarnXp = xpGainsCount < maxRewards;
+
       await setDoc(doc(db, 'mindDiaries', diaryId), {
         id: diaryId,
         studentId: student.studentId,
@@ -299,12 +305,12 @@ export default function StudentDashboard() {
         mood: diaryMood,
         content: diaryContent.trim(),
         createdAt: mindDiary ? mindDiary.createdAt : Date.now(),
-        updatedAt: Date.now()
+        updatedAt: Date.now(),
+        xpGainsCount: canEarnXp ? xpGainsCount + 1 : xpGainsCount
       }, { merge: true });
       
-      if (!mindDiary) {
-        // Calculate rewards for first write
-        const isCoreTask = dailyTask?.coreTasks?.includes('mindDiary');
+      if (canEarnXp) {
+        // Calculate rewards
         const rewardXp = isCoreTask ? 20 : 5;
         const diaryStars = 2;
 
@@ -317,12 +323,13 @@ export default function StudentDashboard() {
           [`dailyXp.${today}`]: increment(rewardXp)
         });
         setEarnedXp(rewardXp); // Show XP effect
+        if (mindDiary) alert('마음일기가 수정되었고 추가 경험치를 획득했습니다!');
       } else {
-        alert('마음일기가 수정되었습니다!');
+        if (mindDiary) alert('마음일기가 수정되었습니다!');
       }
 
       setDiaryContent('');
-      setIsWritingDiary(false); // Go back to dashboard
+      setIsWritingDiary(false);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'mindDiaries');
     } finally {
@@ -330,12 +337,11 @@ export default function StudentDashboard() {
     }
   };
 
-  const handleTypingComplete = async (cpm: number, accuracy: number, score?: number, menu?: string) => {
-    const today = new Date().toISOString().split('T')[0];
+  const handleTypingComplete = async (cpm: number, accuracy: number, score?: number, menu?: string, step?: number) => {
+    const today = getTodayDateString();
     const isCoreTask = dailyTask?.coreTasks?.includes('typing');
     
-    // Check if the user already received XP for typing today
-    let alreadyGotXpToday = false;
+    let todaysTypings: any[] = [];
     try {
       const q = query(
         collection(db, 'submissions'),
@@ -343,30 +349,24 @@ export default function StudentDashboard() {
         where('date', '==', today),
         where('type', '==', 'typing')
       );
-      const docs = await getDocs(q);
-      alreadyGotXpToday = docs.docs.some(d => d.data().score > 0);
+      const docsSnap = await getDocs(q);
+      todaysTypings = docsSnap.docs.map(d => d.data());
     } catch (e) {
       console.error(e);
     }
 
+    const bScores = student.typingBasicScores || {};
+    const limits = [40, 60, 80, 100, 120, 140];
+    const isAllBasicCompleted = limits.every((limit, idx) => (bScores[idx + 1] || 0) >= limit);
+
+    const alreadyGotTypingXpToday = todaysTypings.some(t => t.score > 0);
     let finalXp = 0;
     
-    if (!alreadyGotXpToday) {
+    if (!alreadyGotTypingXpToday) {
       finalXp = isCoreTask ? 20 : 5;
-      
-      if (menu === 'BASIC') {
-        const limits = [40, 60, 80, 100, 120, 140];
-        const bScores = student.typingBasicScores || {};
-        const allCompleted = limits.every((lim, idx) => (bScores[idx + 1] || 0) >= lim);
-        if (allCompleted) finalXp = 0;
-      } else if (menu === 'WORD') {
-        if (student.typingStars?.WORD === 3) {
-          finalXp = 0;
-        }
-      }
     }
 
-    const typingStars = 2; // Always give star pieces? Sure. Wait, they specifically said XP. Let's just give Star pieces or not, keeping original logic for starPieces.
+    const typingStars = finalXp > 0 ? 2 : 0;
 
     const subId = typingSubmission ? `${student.studentId}_${today}_typing_${Date.now()}` : `${student.studentId}_${today}_typing`;
 
@@ -376,6 +376,7 @@ export default function StudentDashboard() {
         classId: student.classId,
         date: today,
         type: 'typing',
+        menu: menu || 'UNKNOWN',
         cpm,
         accuracy,
         score: finalXp, // Use score field for XP earned
@@ -401,9 +402,15 @@ export default function StudentDashboard() {
         updates.typingMaxScore = score;
       }
 
-      await updateDoc(doc(db, 'students', student.studentId), updates);
+      await updateDoc(doc(db, 'students', student.studentId), updates).catch(e => {
+          handleFirestoreError(e, OperationType.UPDATE, `students/${student.studentId}`);
+      });
 
-      setEarnedXp(finalXp);
+      if (finalXp > 0) {
+        setEarnedXp(finalXp);
+      } else {
+        alert('오늘 이미 타자연습 경험치를 획득했습니다.');
+      }
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, `submissions/${subId}`);
     }
@@ -443,7 +450,7 @@ export default function StudentDashboard() {
   } else if (!dailyTask) {
     effectiveTask = {
       classId: student.classId,
-      date: new Date().toISOString().split('T')[0],
+      date: getTodayDateString(),
       mathConfig: {
         mode: 'manual',
         grade: student.grade,
@@ -585,8 +592,16 @@ export default function StudentDashboard() {
   const { progressPercent } = getLevelProgress(student.xp);
   const progress = progressPercent;
 
+  const isCoreTask = (taskId: string) => dailyTask?.coreTasks?.includes(taskId);
+  const getMaxRewards = (taskId: string) => 1;
+  const getXpGainsCount = (subData: any) => subData?.xpGainsCount || (subData ? 1 : 0);
+  
+  const isTaskCompleted = (taskId: string, subData: any) => {
+    return subData ? getXpGainsCount(subData) >= getMaxRewards(taskId) : false;
+  };
+
   const getBadgeContent = (taskId: string) => {
-    const isCore = dailyTask?.coreTasks?.includes(taskId);
+    const isCore = isCoreTask(taskId);
     let xpText = isCore ? "20 XP" : "5 XP";
     if (taskId === 'math' && isCore) xpText = "최대 25 XP";
     return (
@@ -813,11 +828,14 @@ export default function StudentDashboard() {
               title={t('solve_math' as any) || '수학 연습'}
               desc={t('math_desc' as any) || '오늘의 연산 문제를 풀고 실력을 키워요!'}
               color="blue"
-              completed={!!submission}
+              completed={isTaskCompleted('math', submission)}
               onClick={() => {
                 if (effectiveTask) {
-                  if (submission) {
+                  if (isTaskCompleted('math', submission)) {
                     setShowMathRetryModal(true);
+                  } else if (submission) {
+                    setMathMode('retry');
+                    setIsSolvingMath(true);
                   } else {
                     setMathMode('new');
                     setIsSolvingMath(true);
@@ -826,7 +844,7 @@ export default function StudentDashboard() {
                   alert(t('no_tasks_today'));
                 }
               }}
-              badge={!submission ? getBadgeContent('math') : undefined}
+              badge={!isTaskCompleted('math', submission) ? getBadgeContent('math') : undefined}
             />
           )}
           {(dailyTask ? dailyTask.enableMindDiary !== false : true) && (
@@ -835,9 +853,9 @@ export default function StudentDashboard() {
               title={t('mind_diary' as any) || '마음 일기'}
               desc={t('mind_diary_desc' as any) || '오늘 하루 어땠나요? 선생님에게 비밀 이야기를 들려주세요.'}
               color="pink"
-              completed={!!mindDiary}
+              completed={isTaskCompleted('mindDiary', mindDiary)}
               onClick={() => setIsWritingDiary(true)}
-              badge={!mindDiary ? getBadgeContent('mindDiary') : undefined}
+              badge={!isTaskCompleted('mindDiary', mindDiary) ? getBadgeContent('mindDiary') : undefined}
             />
           )}
           {(dailyTask ? dailyTask.enableTopicWriting !== false : true) && (
@@ -846,9 +864,9 @@ export default function StudentDashboard() {
               title={t('topic_writing' as any) || '주제 글쓰기'}
               desc={t('topic_writing_desc' as any) || '매일매일 새로운 주제로 글을 써보아요!'}
               color="green"
-              completed={!!topicWriting}
+              completed={isTaskCompleted('topicWriting', topicWriting)}
               onClick={() => setIsWritingTopic(true)}
-              badge={!topicWriting ? getBadgeContent('topicWriting') : undefined}
+              badge={!isTaskCompleted('topicWriting', topicWriting) ? getBadgeContent('topicWriting') : undefined}
             />
           )}
           {(dailyTask ? dailyTask.enableLiteracy !== false : true) && (
@@ -868,9 +886,9 @@ export default function StudentDashboard() {
               title={t('typing_practice' as any) || '타자연습'}
               desc={t('typing_practice_desc' as any) || '타자 실력을 쑥쑥 키워보세요!'}
               color="purple"
-              completed={false}
+              completed={isTaskCompleted('typing', typingSubmission)}
               onClick={() => setShowKeyboardPopup(true)}
-              badge={getBadgeContent('typing')}
+              badge={!isTaskCompleted('typing', typingSubmission) ? getBadgeContent('typing') : undefined}
             />
           )}
         </div>
@@ -903,7 +921,7 @@ export default function StudentDashboard() {
                     </div>
                   </div>
                   <div className="flex items-center shrink-0 pl-2">
-                    <span className="font-black text-sm sm:text-base text-yellow-600 tracking-tight">{((s as any).dailyXp?.[new Date().toISOString().split('T')[0]] || 0).toLocaleString()} <span className="text-[10px] sm:text-xs text-yellow-500">XP</span></span>
+                    <span className="font-black text-sm sm:text-base text-yellow-600 tracking-tight">{((s as any).dailyXp?.[getTodayDateString()] || 0).toLocaleString()} <span className="text-[10px] sm:text-xs text-yellow-500">XP</span></span>
                   </div>
                 </div>
               ))}
@@ -1063,7 +1081,7 @@ export default function StudentDashboard() {
         <TitleSelectorModal student={student} onClose={() => setIsTitleSelectorOpen(false)} />
       )}
 
-      {earnedXp !== null && (
+      {earnedXp !== null && earnedXp > 0 && (
         <XpEffect xp={earnedXp} onComplete={() => setEarnedXp(null)} />
       )}
     </div>

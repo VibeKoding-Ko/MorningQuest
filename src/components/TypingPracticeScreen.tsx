@@ -215,7 +215,7 @@ interface Props {
   initialGrade?: number;
   student?: Student;
   onClose: () => void;
-  onComplete: (cpm: number, accuracy: number, score?: number, menu?: string) => void;
+  onComplete: (cpm: number, accuracy: number, score?: number, menu?: string, step?: number) => void;
 }
 
 type ViewState = 'HOME' | 'PRACTICE';
@@ -550,7 +550,18 @@ export default function TypingPracticeScreen({ onClose, onComplete, initialGrade
           }
           if (menuKey === 'BASIC' || menuKey === 'WORD' || menuKey === 'SENTENCE' || menuKey === 'PARAGRAPH') {
             setMenu(menuKey);
-            if (menuKey !== 'BASIC') setStep(Math.min(6, Math.max(1, studentGrade)));
+            if (menuKey !== 'BASIC') {
+              setStep(Math.min(6, Math.max(1, studentGrade)));
+            } else {
+              let startStep = 6; // default to last step if all done
+              for (let i = 1; i <= 6; i++) {
+                if ((basicScores[i] || 0) < SCORE_LIMITS[i]) {
+                  startStep = i;
+                  break;
+                }
+              }
+              setStep(startStep);
+            }
             setSelectedParagraph(null);
             setItems([]);
             setView('PRACTICE');
@@ -1206,7 +1217,7 @@ export default function TypingPracticeScreen({ onClose, onComplete, initialGrade
                           <button
                             onClick={() => {
                               const { cpm, accuracy } = calculateResults();
-                              onComplete(cpm, accuracy, currentScore, menu);
+                              onComplete(cpm, accuracy, currentScore, menu, step);
                               setView('HOME');
                               setItems([]);
                             }}

@@ -15,8 +15,10 @@ import { RankBadge } from '../lib/rank';
 import { GoogleGenAI } from '@google/genai';
 import { getTopicForToday } from '../lib/writingTopics';
 import { calculateLevel, LEVEL_THRESHOLDS } from '../lib/levelUtils';
+import { getTodayDateString, formatDateToKSTString } from '../lib/dateUtils';
 import { renderMathText } from './MathProblemScreen';
 import AdminShopScreen from './AdminShopScreen';
+import { useLanguage, useDynamicTranslation } from '../contexts/LanguageContext';
 import AdminMissionScreen from './AdminMissionScreen';
 
 export default function TeacherDashboard() {
@@ -107,7 +109,7 @@ export default function TeacherDashboard() {
       try { handleFirestoreError(error, OperationType.LIST, 'students'); } catch (e) {}
     });
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayDateString();
     const taskRef = doc(db, 'dailyTasks', `${selectedClassId}_${today}`);
     const unsubTask = onSnapshot(taskRef, async (snapshot) => {
       if (snapshot.exists()) {
@@ -274,7 +276,7 @@ export default function TeacherDashboard() {
 
 function MindDiaryManagement({ students, diaries }: { students: Student[], diaries: MindDiary[] }) {
   const [viewMode, setViewMode] = useState<'date' | 'student'>('date');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(getTodayDateString());
   const [selectedStudentId, setSelectedStudentId] = useState<string>(students[0]?.studentId || '');
   const [commentingId, setCommentingId] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
@@ -286,7 +288,7 @@ function MindDiaryManagement({ students, diaries }: { students: Student[], diari
   const last5Days = Array.from({ length: 5 }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - i);
-    return d.toISOString().split('T')[0];
+    return formatDateToKSTString(d);
   });
 
   const handleCommentSubmit = async (diaryId: string) => {
@@ -1442,7 +1444,7 @@ function TaskSetting({ dailyTask, classId, students }: { dailyTask: DailyTask | 
   }, [selectedUnit, areas, selectedArea]);
 
   const handleSaveTask = async () => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayDateString();
     const task: DailyTask = {
       classId,
       date: today,
@@ -2004,14 +2006,14 @@ function ResultsReport({ students, submissions, dailyTask }: { students: Student
   const unitInfo = mathConfig ? CURRICULUM[mathConfig.grade as keyof typeof CURRICULUM]?.[mathConfig.semester as 1|2]?.find(u => u.id === mathConfig.unit) : null;
   const areaInfo = unitInfo?.areas.find(a => a.id === mathConfig?.area);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = getTodayDateString();
   const subjectSubmissions = submissions.filter(s => s.type === subject);
   const todaySubmissions = subjectSubmissions.filter(s => s.date === today);
 
   const last7Days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - (6 - i));
-    return d.toISOString().split('T')[0];
+    return formatDateToKSTString(d);
   });
 
   // Chart data: Average score per day for the last 7 days (class or individual)
@@ -2269,7 +2271,7 @@ function StatCard({ label, value, color }: { label: string; value: string; color
 
 function TopicWritingManagement({ students, topicWritings }: { students: Student[], topicWritings: any[] }) {
   const [viewMode, setViewMode] = useState<'date' | 'student'>('date');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(getTodayDateString());
   const [selectedStudentId, setSelectedStudentId] = useState<string>(students[0]?.studentId || '');
   const [commentingId, setCommentingId] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
@@ -2280,7 +2282,7 @@ function TopicWritingManagement({ students, topicWritings }: { students: Student
   const last5Days = Array.from({ length: 5 }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - i);
-    return d.toISOString().split('T')[0];
+    return formatDateToKSTString(d);
   });
 
   const handleCommentSubmit = async (writingId: string) => {
@@ -2543,7 +2545,7 @@ function TopicWritingManagement({ students, topicWritings }: { students: Student
 }
 
 function DailyCompletionStatus({ students, submissions, diaries, topicWritings }: { students: Student[], submissions: Submission[], diaries: MindDiary[], topicWritings: any[] }) {
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(getTodayDateString());
 
   return (
     <div className="space-y-6">
@@ -2683,7 +2685,11 @@ function MindDiaryPreviewModal({ onClose }: { onClose: () => void }) {
 
 function TopicWritingPreviewModal({ onClose, mode, customTopic }: { onClose: () => void, mode: 'ai' | 'manual', customTopic: string }) {
   const aiTopicObj = getTopicForToday();
-  const topicText = mode === 'manual' && customTopic ? customTopic : aiTopicObj.topic;
+  const rawTopicText = mode === 'manual' && customTopic ? customTopic : aiTopicObj.topic;
+  
+  const topicText = useDynamicTranslation(rawTopicText);
+  const guide1Text = useDynamicTranslation(aiTopicObj.guide1);
+  const guide2Text = useDynamicTranslation(aiTopicObj.guide2);
 
   return (
     <motion.div 
@@ -2717,8 +2723,8 @@ function TopicWritingPreviewModal({ onClose, mode, customTopic }: { onClose: () 
                 글쓰기를 도와줄께!
               </div>
               <ul className="list-disc list-inside space-y-2 text-yellow-800 font-medium ml-2">
-                <li>{aiTopicObj.guide1}</li>
-                <li>{aiTopicObj.guide2}</li>
+                <li>{guide1Text}</li>
+                <li>{guide2Text}</li>
               </ul>
             </div>
           )}

@@ -2,12 +2,13 @@ import React from 'react';
 import { ArrowRight, Calculator } from 'lucide-react';
 import { renderMathText } from './MathProblemScreen';
 
-export function MathProblemList({ problems, userAnswers, onChangeAnswer, mode = 'solve', area }: {
+export function MathProblemList({ problems, userAnswers, onChangeAnswer, mode = 'solve', area, results }: {
   problems: { question: string; correctAnswer: string }[];
   userAnswers?: string[];
   onChangeAnswer?: (i: number, val: string) => void;
-  mode?: 'solve' | 'preview' | 'new';
+  mode?: 'solve' | 'preview' | 'new' | 'view';
   area?: string;
+  results?: { isCorrect: boolean }[];
 }) {
   const problemData = problems.map((p, i) => {
     let parsedQ = null;
@@ -80,11 +81,28 @@ export function MathProblemList({ problems, userAnswers, onChangeAnswer, mode = 
     }
   };
 
-  const renderProblem = ({ p, i, parsedQ, verticalMatch, isVertical }: any, displayIndex: number) => {
+    const renderProblem = ({ p, i, parsedQ, verticalMatch, isVertical }: any, displayIndex: number) => {
+      const isCorrect = results && results[i] ? results[i].isCorrect : undefined;
+
+    const circleMark = isCorrect !== undefined ? (
+        <div className="absolute top-1/2 left-1/2 -translate-y-1/2 -translate-x-1/2 pointer-events-none z-10 w-8 h-8 flex items-center justify-center">
+            {isCorrect ? (
+              <svg viewBox="0 0 100 100" className="w-10 h-10 absolute stroke-red-500 opacity-80" strokeWidth="10" fill="none">
+                 <circle cx="50" cy="50" r="40" />
+              </svg>
+            ) : (
+                <svg viewBox="0 0 100 100" className="w-10 h-10 absolute stroke-red-500 opacity-80" strokeWidth="12" fill="none">
+                  <path d="M 70 20 L 30 80" />
+                </svg>
+            )}
+        </div>
+      ) : null;
+
     const expectedParts = p.correctAnswer.split(/,(?![^()]*\))/g);
     const ansParts = getAns(i).split(/,(?![^()]*\))/g);
     const isMany = expectedParts.length >= 3;
     const isPreview = mode === 'preview';
+    const isView = mode === 'view';
 
     const renderPart = (expected: string, ans: string, onChange: (v: string) => void) => {
       if (isPreview) {
@@ -169,7 +187,7 @@ export function MathProblemList({ problems, userAnswers, onChangeAnswer, mode = 
       return (
         <div key={i} className="w-full flex flex-col items-center justify-center p-1 sm:p-2 bg-white rounded-xl border border-gray-100 shadow-sm relative min-h-[80px]">
            <div className="absolute top-2 left-3 flex items-center gap-2">
-             <span className="text-blue-600 font-black text-sm">{displayIndex + 1}.</span>
+             <span className="text-blue-600 font-black text-sm relative">{displayIndex + 1}.{circleMark}</span>
              {mode === 'new' && i === 0 && <span className="text-[10px] font-bold text-red-500 bg-red-100 px-1.5 py-0.5 rounded-full whitespace-nowrap">예시</span>}
            </div>
            <div className="text-lg font-bold text-gray-800 mb-2 mt-4 whitespace-nowrap">{parsedQ.n1} × {parsedQ.n2} = {parsedQ.prod}</div>
@@ -200,7 +218,7 @@ export function MathProblemList({ problems, userAnswers, onChangeAnswer, mode = 
       return (
         <div key={i} className="w-full flex flex-col items-center justify-center p-1 sm:p-2 bg-white rounded-xl border border-gray-100 shadow-sm relative min-h-[80px]">
            <div className="absolute top-2 left-3 flex items-center gap-2">
-             <span className="text-blue-600 font-black text-sm">{displayIndex + 1}.</span>
+             <span className="text-blue-600 font-black text-sm relative">{displayIndex + 1}.{circleMark}</span>
              {mode === 'new' && i === 0 && <span className="text-[10px] font-bold text-red-500 bg-red-100 px-1.5 py-0.5 rounded-full whitespace-nowrap">예시</span>}
            </div>
            <div className="text-lg font-bold text-gray-800 mb-2 mt-4 whitespace-nowrap">{parsedQ.prod} ÷ {parsedQ.n1} = {parsedQ.n2}</div>
@@ -227,7 +245,7 @@ export function MathProblemList({ problems, userAnswers, onChangeAnswer, mode = 
       return (
         <div key={i} className="w-full flex flex-col items-center justify-center p-1 sm:p-2 bg-white rounded-xl border border-gray-100 shadow-sm relative min-h-[80px]">
            <div className="absolute top-2 left-3 flex items-center gap-2">
-             <span className="text-blue-600 font-black text-sm">{displayIndex + 1}.</span>
+             <span className="text-blue-600 font-black text-sm relative">{displayIndex + 1}.{circleMark}</span>
              {mode === 'new' && i === 0 && <span className="text-[10px] font-bold text-red-500 bg-red-100 px-1.5 py-0.5 rounded-full whitespace-nowrap">예시</span>}
            </div>
            <div className="mt-4 w-full flex justify-center">
@@ -268,7 +286,7 @@ export function MathProblemList({ problems, userAnswers, onChangeAnswer, mode = 
     return (
       <div key={i} className="w-full flex flex-col items-center justify-center p-1 sm:p-2 bg-white rounded-xl border border-gray-100 shadow-sm relative min-h-[80px]">
         <div className="absolute top-2 left-3 flex items-center gap-2">
-           <span className="text-blue-600 font-black text-sm">{displayIndex + 1}.</span>
+           <span className="text-blue-600 font-black text-sm relative">{displayIndex + 1}.{circleMark}</span>
            {mode === 'new' && i === 0 && <span className="text-[10px] font-bold text-red-500 bg-red-100 px-1.5 py-0.5 rounded-full whitespace-nowrap">예시</span>}
         </div>
         

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getTodayDateString } from '../lib/dateUtils';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, query, where, onSnapshot, doc, setDoc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { Student, MissionQuest, MissionSubmission } from '../types';
@@ -15,7 +16,7 @@ interface MissionCardProps {
 
 // Sub-component for Mission Card to simplify main render
 function MissionCard({ mission, submissions, handleSubmit, handleCancelSubmit, getRewardStars }: MissionCardProps) {
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getTodayDateString();
   
   // For recurring missions, find today's submission
   const sub = mission.isRecurring
@@ -119,8 +120,7 @@ export default function StudentMissionScreen({ student, onClose }: { student: St
   };
 
   const handleSubmit = async (mission: MissionQuest) => {
-    const todayDate = new Date();
-    const todayStr = todayDate.toISOString().split('T')[0];
+    const todayStr = getTodayDateString();
 
     const rewardStars = getRewardStars(mission);
     

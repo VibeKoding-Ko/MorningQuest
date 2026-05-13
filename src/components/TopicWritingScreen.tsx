@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { getTodayDateString } from '../lib/dateUtils';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { doc, setDoc, getDoc, increment } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, increment } from 'firebase/firestore';
 import { Student, DailyTask } from '../types';
 import { motion } from 'motion/react';
 import { ChevronLeft, Send, PenTool } from 'lucide-react';
 import { getTopicForToday } from '../lib/writingTopics';
 import { calculateLevel } from '../lib/levelUtils';
-import { useLanguage } from '../contexts/LanguageContext';
+import { useLanguage, useDynamicTranslation } from '../contexts/LanguageContext';
 import XpEffect from './XpEffect';
 
 interface TopicWritingScreenProps {
@@ -28,15 +29,21 @@ export default function TopicWritingScreen({ student, onBack, dailyTask }: Topic
     ? dailyTask.topicWritingConfig.customTopic 
     : aiTopicObj.topic;
 
+  const translatedTopicText = useDynamicTranslation(topicText);
+  const translatedGuide1 = useDynamicTranslation(aiTopicObj.guide1);
+  const translatedGuide2 = useDynamicTranslation(aiTopicObj.guide2);
+
   useEffect(() => {
     const fetchSubmission = async () => {
-      const today = new Date().toISOString().split('T')[0];
+      const today = getTodayDateString();
       const docRef = doc(db, 'topicWritings', `${student.studentId}_${today}`);
       try {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           setExistingSubmission(docSnap.data());
           setContent(docSnap.data().content);
+        } else {
+          setExistingSubmission(null);
         }
       } catch (error) {
         handleFirestoreError(error, OperationType.GET, 'topicWritings');
@@ -52,9 +59,14 @@ export default function TopicWritingScreen({ student, onBack, dailyTask }: Topic
     }
 
     setIsSubmitting(true);
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayDateString();
     
     try {
+      const isCoreTask = dailyTask?.coreTasks?.includes('topicWriting');
+      const maxRewards = 1;
+      const xpGainsCount = existingSubmission?.xpGainsCount || 0;
+      const canEarnXp = xpGainsCount < maxRewards;
+
       await setDoc(doc(db, 'topicWritings', `${student.studentId}_${today}`), {
         studentId: student.studentId,
         classId: student.classId,
@@ -62,35 +74,38 @@ export default function TopicWritingScreen({ student, onBack, dailyTask }: Topic
         topic: topicText,
         content,
         createdAt: existingSubmission?.createdAt || Date.now(),
-        updatedAt: Date.now()
+        updatedAt: Date.now(),
+        xpGainsCount: canEarnXp ? xpGainsCount + 1 : xpGainsCount
       }, { merge: true });
       
-      // Update XP if it's the first submission
-      if (!existingSubmission) {
+      // Update XP if they can earn it
+      if (canEarnXp) {
         const studentRef = doc(db, 'students', student.studentId);
         const studentSnap = await getDoc(studentRef);
         if (studentSnap.exists()) {
           const currentXp = studentSnap.data().xp || 0;
           const currentStars = studentSnap.data().starPieces || 0;
           
-          const isCoreTask = dailyTask?.coreTasks?.includes('topicWriting');
           const rewardXp = isCoreTask ? 20 : 5;
           const topicStars = 2;
 
           const newXp = currentXp + rewardXp;
           const newLevel = calculateLevel(newXp);
 
-          await setDoc(studentRef, { 
+          await updateDoc(studentRef, { 
             xp: newXp,
             level: newLevel,
             starPieces: currentStars + topicStars,
             [`dailyXp.${today}`]: increment(rewardXp)
-          }, { merge: true });
+          });
           setEarnedXp(rewardXp);
+          if (existingSubmission) alert('주제 글쓰기가 수정되었고 추가 경험치를 획득했습니다!');
         }
       } else {
-        alert('주제 글쓰기가 성공적으로 수정되었습니다!');
-        onBack();
+        if (existingSubmission) alert('주제 글쓰기가 성공적으로 수정되었습니다!');
+        else onBack(); // Edge case if not earning xp but first submission
+        
+        if (existingSubmission) onBack();
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'topicWritings');
@@ -125,7 +140,7 @@ export default function TopicWritingScreen({ student, onBack, dailyTask }: Topic
           <div className="text-center mb-8">
             <h3 className="text-sm font-bold text-green-600 mb-2">{t('todays_topic')}</h3>
             <p className="text-2xl font-black text-gray-800 break-keep-all">
-              {topicText === '내가 느낀 감정 글쓰기: 뿌듯하다' ? t('proud_moment') : topicText}
+              {translatedTopicText}
             </p>
           </div>
 
@@ -135,8 +150,8 @@ export default function TopicWritingScreen({ student, onBack, dailyTask }: Topic
                 {t('writing_helper')}
               </div>
               <ul className="list-disc list-inside space-y-2 text-yellow-800 font-medium ml-2">
-                <li>{aiTopicObj.guide1 === '내가 기쁜 마음으로 가득한 상황은 언제였나요?' ? t('proud_guide1') : aiTopicObj.guide1}</li>
-                <li>{aiTopicObj.guide2 === '나를 흐뭇하게 한 사람이나 상황이 있었나요?' ? t('proud_guide2') : aiTopicObj.guide2}</li>
+                <li>{translatedGuide1}</li>
+                <li>{translatedGuide2}</li>
               </ul>
             </div>
           )}

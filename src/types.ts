@@ -91,6 +91,7 @@ export interface Submission {
   type: 'math' | 'literacy';
   score: number;
   isFirstAttempt: boolean;
+  xpGainsCount?: number;
   answers: { question: string; userAnswer: string; correctAnswer: string; isCorrect: boolean }[];
   grade?: number;
   semester?: number;
@@ -109,6 +110,7 @@ export interface MindDiary {
   content: string;
   teacherComment?: string;
   createdAt: number;
+  xpGainsCount?: number;
 }
 
 export interface TopicWriting {
@@ -119,6 +121,7 @@ export interface TopicWriting {
   content: string;
   teacherComment?: string;
   createdAt: number;
+  xpGainsCount?: number;
 }
 
 export interface ShopItem {
