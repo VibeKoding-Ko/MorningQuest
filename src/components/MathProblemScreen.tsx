@@ -466,7 +466,7 @@ export default function MathProblemScreen({ task, student, onBack, mode = 'new',
                   if (results && results.length > 0) {
                     const newResults = [...results];
                     if (newResults[i]) {
-                      (newResults[i] as any).isCorrect = undefined;
+                      delete (newResults[i] as any).isCorrect;
                     }
                     setResults(newResults);
                   }

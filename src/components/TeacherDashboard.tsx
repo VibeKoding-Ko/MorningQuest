@@ -1012,13 +1012,13 @@ function TabButton({ active, onClick, icon, label, id }: { active: boolean; onCl
         deleteInCollectionByStudentId('topicWritings'),
         deleteInCollectionByStudentId('missionSubmissions'),
         deleteInCollectionByStudentId('purchaseRecords'),
-        deleteDoc(doc(db, "students", studentToDelete.id))
       ]);
+      await deleteDoc(doc(db, "students", studentToDelete.id));
       
       setShowDeleteModal(false);
       setStudentToDelete(null);
     } catch (e) {
-      handleFirestoreError(e, OperationType.DELETE, `students/${studentToDelete.id}`);
+      handleFirestoreError(e, OperationType.DELETE, `students/${studentToDelete?.id}`);
     }
   };
 

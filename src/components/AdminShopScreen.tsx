@@ -18,17 +18,18 @@ export default function AdminShopScreen({ classId, students }: { classId: string
 
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
 
-  const [adjustingStudent, setAdjustingStudent] = useState<{id: string, name: string, type: 'add' | 'remove'} | null>(null);
+  const [adjustingAll, setAdjustingAll] = useState<'add' | 'remove' | null>(null);
   const [adjustAmount, setAdjustAmount] = useState('10');
 
-  const confirmAdjustStars = async () => {
-    if (!adjustingStudent) return;
-    const amount = Number(adjustAmount);
-    if (!amount || amount <= 0) return;
+  const confirmAdjustAllStars = async () => {
+    const diff = Number(adjustAmount) * (adjustingAll === 'add' ? 1 : -1);
+    await handleAdjustStar('all', diff);
+    setAdjustingAll(null);
+  };
 
+  const handleAdjustStar = async (id: string, diff: number) => {
     try {
-      const diff = adjustingStudent.type === 'add' ? amount : -amount;
-      if (adjustingStudent.id === 'all') {
+      if (id === 'all') {
         const batch = students.map(s => 
           updateDoc(doc(db, 'students', s.studentId), {
             starPieces: increment(diff)
@@ -36,12 +37,10 @@ export default function AdminShopScreen({ classId, students }: { classId: string
         );
         await Promise.all(batch);
       } else {
-        await updateDoc(doc(db, 'students', adjustingStudent.id), {
+        await updateDoc(doc(db, 'students', id), {
           starPieces: increment(diff)
         });
       }
-      setAdjustingStudent(null);
-      setAdjustAmount('10');
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, 'students');
     }
@@ -219,13 +218,13 @@ export default function AdminShopScreen({ classId, students }: { classId: string
                <h3 className="text-lg font-bold">학생별 별조각 현황</h3>
                <div className="flex gap-2">
                  <button 
-                   onClick={() => setAdjustingStudent({ id: 'all', name: '전체 학생', type: 'add' })}
+                   onClick={() => { setAdjustingAll('add'); setAdjustAmount('10'); }}
                    className="p-1 px-3 border border-green-200 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition shadow-sm text-sm font-bold flex items-center gap-1"
                  >
                    전체 <Plus className="w-4 h-4 inline" />
                  </button>
                  <button 
-                   onClick={() => setAdjustingStudent({ id: 'all', name: '전체 학생', type: 'remove' })}
+                   onClick={() => { setAdjustingAll('remove'); setAdjustAmount('10'); }}
                    className="p-1 px-3 border border-red-200 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition shadow-sm text-sm font-bold flex items-center gap-1"
                  >
                    전체 <Minus className="w-4 h-4 inline" />
@@ -236,28 +235,30 @@ export default function AdminShopScreen({ classId, students }: { classId: string
                <table className="w-full text-left">
                  <thead className="bg-gray-50 border-b border-gray-100">
                    <tr>
-                     <th className="px-4 py-3 font-semibold text-gray-600">닉네임</th>
+                     <th className="px-4 py-3 font-semibold text-gray-600 w-16 text-center">번호</th>
+                     <th className="px-4 py-3 font-semibold text-gray-600">이름/닉네임</th>
                      <th className="px-4 py-3 font-semibold text-gray-600 text-right">별조각</th>
                      <th className="px-4 py-3 font-semibold text-gray-600 text-center w-32">관리</th>
                    </tr>
                  </thead>
                  <tbody className="divide-y divide-gray-100">
-                   {students.sort((a,b) => (b.starPieces || 0) - (a.starPieces || 0)).map(s => (
+                   {students.sort((a,b) => a.number - b.number).map(s => (
                      <tr key={s.studentId} className="hover:bg-gray-50">
-                       <td className="px-4 py-3 font-bold">{s.nickname || s.name}</td>
+                       <td className="px-4 py-3 text-center text-gray-500 font-medium">{s.number}</td>
+                       <td className="px-4 py-3 font-bold">{s.nickname ? `${s.name}(${s.nickname})` : s.name}</td>
                        <td className="px-4 py-3 text-right font-bold text-indigo-600 flex items-center justify-end gap-1">
                          <Star className="w-4 h-4 fill-indigo-600" /> {s.starPieces || 0}
                        </td>
                        <td className="px-4 py-3 text-center">
                          <div className="flex justify-center gap-2">
                            <button 
-                             onClick={() => setAdjustingStudent({ id: s.studentId, name: s.nickname || s.name, type: 'add' })}
+                             onClick={() => handleAdjustStar(s.studentId, 1)}
                              className="p-1.5 border border-green-200 bg-green-50 text-green-700 rounded hover:bg-green-100 transition shadow-sm text-xs font-bold w-8 flex justify-center items-center"
                            >
                              <Plus className="w-4 h-4" />
                            </button>
                            <button 
-                             onClick={() => setAdjustingStudent({ id: s.studentId, name: s.nickname || s.name, type: 'remove' })}
+                             onClick={() => handleAdjustStar(s.studentId, -1)}
                              className="p-1.5 border border-red-200 bg-red-50 text-red-700 rounded hover:bg-red-100 transition shadow-sm text-xs font-bold w-8 flex justify-center items-center"
                            >
                              <Minus className="w-4 h-4" />
@@ -273,14 +274,15 @@ export default function AdminShopScreen({ classId, students }: { classId: string
         </div>
       </div>
 
-      {adjustingStudent && (
+
+      {adjustingAll && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl">
             <h3 className="text-xl font-bold mb-2">
-              {adjustingStudent.type === 'add' ? '별조각 추가' : '별조각 뺏기'}
+              전체 학생 {adjustingAll === 'add' ? '별조각 추가' : '별조각 제거'}
             </h3>
             <p className="text-gray-500 mb-6 text-sm">
-              <span className="font-bold text-gray-800">{adjustingStudent.name}</span> 학생에게 {adjustingStudent.type === 'add' ? '추가할' : '뺏을'} 별조각 개수를 입력하세요.
+              전체 학생에게 {adjustingAll === 'add' ? '추가할' : '제거할'} 별조각 개수를 입력하세요.
             </p>
             <input 
               type="number" 
@@ -291,16 +293,16 @@ export default function AdminShopScreen({ classId, students }: { classId: string
             />
             <div className="flex gap-3">
               <button 
-                onClick={() => { setAdjustingStudent(null); setAdjustAmount('10'); }} 
+                onClick={() => { setAdjustingAll(null); setAdjustAmount('10'); }} 
                 className="flex-1 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all font-bold"
               >
                 취소
               </button>
               <button 
-                onClick={confirmAdjustStars} 
-                className={`flex-1 py-3 text-white rounded-xl transition-all font-bold ${adjustingStudent.type === 'add' ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'}`}
+                onClick={confirmAdjustAllStars} 
+                className={`flex-1 py-3 text-white rounded-xl transition-all font-bold ${adjustingAll === 'add' ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'}`}
               >
-                {adjustingStudent.type === 'add' ? '추가하기' : '뺏기'}
+                {adjustingAll === 'add' ? '추가하기' : '제거'}
               </button>
             </div>
           </div>

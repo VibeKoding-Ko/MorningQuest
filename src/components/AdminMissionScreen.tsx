@@ -43,17 +43,24 @@ export default function AdminMissionScreen({ classId, students }: { classId: str
     
     const id = editingMission ? editingMission.id : `${classId}_${Date.now()}`;
     try {
-      await setDoc(doc(db, 'missionQuests', id), {
+      const docData: any = {
         id,
         classId,
         title,
         dueDate,
         isRecurring,
-        recurringType: isRecurring ? recurringType : undefined,
-        recurringDays: isRecurring && recurringType === 'weekly' ? recurringDays : undefined,
-        recursUntil: isRecurring ? dueDate : undefined,
         createdAt: editingMission ? editingMission.createdAt : Date.now()
-      });
+      };
+      
+      if (isRecurring) {
+        docData.recurringType = recurringType;
+        docData.recursUntil = dueDate;
+        if (recurringType === 'weekly') {
+          docData.recurringDays = recurringDays;
+        }
+      }
+      
+      await setDoc(doc(db, 'missionQuests', id), docData);
       setShowAdd(false);
       setEditingMission(null);
       setTitle('');

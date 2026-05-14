@@ -139,6 +139,7 @@ service cloud.firestore {
       allow list: if isSignedIn();
       allow create: if isSignedIn() && isValidSubmission(incoming());
       allow update: if isTeacher() || (isSignedIn() && incoming().studentId == existing().studentId && isValidSubmission(incoming()));
+      allow delete: if isTeacher();
     }
 
     // 7. Mind Diaries
@@ -147,6 +148,7 @@ service cloud.firestore {
       allow list: if isSignedIn();
       allow create: if isSignedIn();
       allow update: if isTeacher() || (isSignedIn() && incoming().studentId == existing().studentId);
+      allow delete: if isTeacher();
     }
 
     // 8. Topic Writings
@@ -155,13 +157,15 @@ service cloud.firestore {
       allow list: if isSignedIn();
       allow create: if isSignedIn();
       allow update: if isTeacher() || (isSignedIn() && incoming().studentId == existing().studentId);
+      allow delete: if isTeacher();
     }
 
     // 9. Shop Items
     match /shopItems/{itemId} {
       allow get: if isSignedIn() && isValidId(itemId);
       allow list: if isSignedIn();
-      allow create, update, delete: if isTeacher();
+      allow create, delete: if isTeacher();
+      allow update: if isTeacher() || (isSignedIn() && incoming().diff(existing()).affectedKeys().hasOnly(['quantity']) && incoming().quantity == existing().quantity - 1);
     }
 
     // 10. Purchase Records
@@ -170,6 +174,7 @@ service cloud.firestore {
       allow list: if isSignedIn();
       allow create: if isSignedIn();
       allow update: if isTeacher() || (isSignedIn() && incoming().diff(existing()).affectedKeys().hasOnly(['used']));
+      allow delete: if isTeacher() || isSignedIn();
     }
 
     // 11. Mission Quests
