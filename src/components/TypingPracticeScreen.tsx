@@ -395,6 +395,19 @@ export default function TypingPracticeScreen({ onClose, onComplete, initialGrade
     }
   }, [completed, menu, step, currentScore, currentCpm, currentAccuracy]);
 
+  const clearPracticeState = () => {
+    setCompleted(false);
+    setItems([]);
+    setCurrentIndex(0);
+    setMistakes(0);
+    setCorrectChars(0);
+    setTypedStrokes(0);
+    setStartTime(null);
+    setWordStartTime(null);
+    setActiveTypingTime(0);
+    setSelectedParagraph(null);
+  };
+
   const initLevel = (lvl: number) => {
     const newItems = [];
     if (menu === 'BASIC') {
@@ -562,8 +575,7 @@ export default function TypingPracticeScreen({ onClose, onComplete, initialGrade
               }
               setStep(startStep);
             }
-            setSelectedParagraph(null);
-            setItems([]);
+            clearPracticeState();
             setView('PRACTICE');
           } else {
             alert('준비 중입니다!');
@@ -730,7 +742,7 @@ export default function TypingPracticeScreen({ onClose, onComplete, initialGrade
   return (
     <div className="fixed inset-0 bg-gray-100 z-50 flex flex-col">
       <header className="bg-white px-6 py-4 flex items-center shadow-sm border-b border-gray-200 shrink-0 relative z-20">
-        <button onClick={() => { setView('HOME'); setItems([]); }} className="flex items-center gap-2 text-gray-500 font-bold hover:text-purple-600 transition-all shrink-0">
+        <button onClick={() => { setView('HOME'); clearPracticeState(); }} className="flex items-center gap-2 text-gray-500 font-bold hover:text-purple-600 transition-all shrink-0">
           <ChevronLeft className="w-6 h-6" /> {t('go_back')}
         </button>
         <div className="flex-1 flex justify-center">
@@ -1219,7 +1231,7 @@ export default function TypingPracticeScreen({ onClose, onComplete, initialGrade
                               const { cpm, accuracy } = calculateResults();
                               onComplete(cpm, accuracy, currentScore, menu, step);
                               setView('HOME');
-                              setItems([]);
+                              clearPracticeState();
                             }}
                             className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-lg sm:text-xl hover:bg-blue-700 transition-all shadow-[0_10px_20px_-5px_rgba(37,99,235,0.4)] flex items-center justify-center gap-2"
                           >
@@ -1237,7 +1249,7 @@ export default function TypingPracticeScreen({ onClose, onComplete, initialGrade
                           <button
                             onClick={() => {
                               setView('HOME'); 
-                              setItems([]);
+                              clearPracticeState();
                             }}
                             className="w-full bg-gray-100 text-gray-600 py-3 sm:py-4 rounded-2xl font-bold text-base sm:text-lg hover:bg-gray-200 transition-all"
                           >
